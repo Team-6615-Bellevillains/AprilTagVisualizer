@@ -46,8 +46,15 @@
 
   <div class="file-input">
     <label for="file-input">Choose a field map file:</label>
-    <input type="file" id="file-input" accept=".fmap,.json">
+    <input type="file" id="file-input" accept="*">
     <div id="format-display" style="margin-top: 10px; font-style: italic;">Format: Not detected</div>
+    <p>If you don't have a field map file, you can download one <a href="https://raw.githubusercontent.com/wpilibsuite/allwpilib/refs/heads/main/apriltag/src/main/native/resources/edu/wpi/first/apriltag/2025-reefscape-welded.json">here</a>.</p>
+    <p>If that website doesn't prompt you for a download, you'll have to:</p>
+    <ol>
+      <li>Right click somewhere on text of the page</li>
+      <li>Click "Save as" or similar</li>
+      <li>Follow the file download prompt</li>
+    </ol>
   </div>
 
   <div id="canvas-container">
