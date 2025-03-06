@@ -111,8 +111,6 @@
       reader.readAsText(file);
     }
 
-
-
     function quaternionToRotationMatrix(q) {
       // Extract quaternion components
       const w = q.W !== undefined ? q.W : q.w;
@@ -162,65 +160,60 @@
 
       if (format === 'limelight') {
         // === LIMELIGHT FORMAT (fmap) ===
-        fiducialPoints = fieldMap.fiducials.map(fiducial => {
-          // The transform array represents a 4x4 transformation matrix stored in column-major order:
-          // [0  4  8  12]    [R11 R21 R31 Tx]
-          // [1  5  9  13] => [R12 R22 R32 Ty]
-          // [2  6  10 14]    [R13 R23 R33 Tz]
-          // [3  7  11 15]    [0   0   0   1 ]
-          // 
-          // Where:
-          // - R## elements (indices 0,1,2,4,5,6,8,9,10) represent the 3x3 rotation matrix
-          // - T# elements (indices 3,7,11) represent the translation vector (x,y,z)
-
-          const rotMatrix = [
-            [fiducial.transform[0], fiducial.transform[1], fiducial.transform[2]],  
-            [fiducial.transform[4], fiducial.transform[5], fiducial.transform[6]],  
-            [fiducial.transform[8], fiducial.transform[9], fiducial.transform[10]]  
-          ];
-
-          return {
-            id: fiducial.id,                 
-            x: fiducial.transform[3],        
-            y: fiducial.transform[7],        
-            z: fiducial.transform[11],       
-            rotation: rotMatrix,             
-            rawTransform: fiducial.transform 
-          };
-        });
-
         fieldDimensions = {
           width: fieldMap.fieldlength,
           height: fieldMap.fieldwidth
         };
+        
+        fiducialPoints = fieldMap.fiducials.map(fiducial => {
+          // Convert from center-based coordinates to bottom-left based
+          const x = fiducial.transform[3] + fieldDimensions.width / 2;
+          const y = fiducial.transform[7] + fieldDimensions.height / 2;
+          
+          const rotMatrix = [
+            [fiducial.transform[0], fiducial.transform[1], fiducial.transform[2]],
+            [fiducial.transform[4], fiducial.transform[5], fiducial.transform[6]],
+            [fiducial.transform[8], fiducial.transform[9], fiducial.transform[10]]
+          ];
+
+          return {
+            id: fiducial.id,
+            x: x,
+            y: y,
+            z: fiducial.transform[11],
+            rotation: rotMatrix,
+            rawTransform: fiducial.transform
+          };
+        });
       } else {
         // === WPILIB FORMAT (json) ===
+        fieldDimensions = {
+          width: fieldMap.field.length,
+          height: fieldMap.field.width
+        };
+        
         fiducialPoints = fieldMap.tags.map(tag => {
-          // Convert from WPILib coordinates (origin at corner) to centered coordinates
-          const x = tag.pose.translation.x - fieldMap.field.length / 2;
-          const y = tag.pose.translation.y - fieldMap.field.width / 2;
+          // Use coordinates directly (already bottom-left based)
+          const x = tag.pose.translation.x;
+          const y = tag.pose.translation.y;
           const z = tag.pose.translation.z;
 
           // Convert quaternion to rotation matrix
           const rotMatrix = quaternionToRotationMatrix(tag.pose.rotation.quaternion);
 
           return {
-            id: tag.ID,          
-            x: x,                
-            y: y,                
-            z: z,                
-            rotation: rotMatrix, 
-            rawQuaternion: tag.pose.rotation.quaternion 
+            id: tag.ID,
+            x: x,
+            y: y,
+            z: z,
+            rotation: rotMatrix,
+            rawQuaternion: tag.pose.rotation.quaternion
           };
         });
-
-        fieldDimensions = {
-          width: fieldMap.field.length,
-          height: fieldMap.field.width
-        };
       }
 
-      squarePosition = { x: 0, y: 0 };
+      // Initialize square position near bottom left
+      squarePosition = { x: fieldDimensions.width * 0.1, y: fieldDimensions.height * 0.1 };
       squareRotation = 0;
 
       updateClosestPoint();
@@ -289,8 +282,8 @@
 
       const fieldToCanvas = (x, y) => {
         return {
-          x: offsetX + (x + fieldDimensions.width / 2) * scale,
-          y: offsetY + (fieldDimensions.height / 2 - y) * scale,
+          x: offsetX + x * scale,
+          y: offsetY + (fieldDimensions.height - y) * scale,
         };
       };
 
@@ -301,7 +294,7 @@
       ctx.strokeStyle = '#ddd';
       ctx.lineWidth = 1;
 
-      for (let x = -Math.ceil(fieldDimensions.width / 2); x <= Math.ceil(fieldDimensions.width / 2); x += 1) {
+      for (let x = 0; x <= Math.ceil(fieldDimensions.width); x += 1) {
         const canvasX = fieldToCanvas(x, 0).x;
         ctx.beginPath();
         ctx.moveTo(canvasX, offsetY);
@@ -309,7 +302,7 @@
         ctx.stroke();
       }
 
-      for (let y = -Math.ceil(fieldDimensions.height / 2); y <= Math.ceil(fieldDimensions.height / 2); y += 1) {
+      for (let y = 0; y <= Math.ceil(fieldDimensions.height); y += 1) {
         const canvasY = fieldToCanvas(0, y).y;
         ctx.beginPath();
         ctx.moveTo(offsetX, canvasY);
@@ -317,29 +310,47 @@
         ctx.stroke();
       }
 
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 2;
-
       const origin = fieldToCanvas(0, 0);
-      const xAxis = fieldToCanvas(1, 0);
-
+      const xAxis = fieldToCanvas(2, 0);
+      const yAxis = fieldToCanvas(0, 2);
+      
       ctx.beginPath();
       ctx.moveTo(origin.x, origin.y);
-      ctx.lineTo(xAxis.x, xAxis.y);
+      ctx.lineTo(xAxis.x, origin.y);
+      ctx.strokeStyle = '#FF0000';
+      ctx.lineWidth = 3;
       ctx.stroke();
-
-      ctx.fillStyle = '#000';
-      ctx.font = '12px Arial';
-      ctx.fillText('X', xAxis.x + 5, xAxis.y);
-
-      const yAxis = fieldToCanvas(0, 1);
-
+      
+      ctx.beginPath();
+      ctx.moveTo(xAxis.x, origin.y);
+      ctx.lineTo(xAxis.x - 10, origin.y - 6);
+      ctx.lineTo(xAxis.x - 10, origin.y + 6);
+      ctx.closePath();
+      ctx.fillStyle = '#FF0000';
+      ctx.fill();
+      
+      ctx.fillStyle = '#FF0000';
+      ctx.font = 'bold 20px Arial';
+      ctx.fillText('X', xAxis.x + 10, origin.y + 6);
+      
       ctx.beginPath();
       ctx.moveTo(origin.x, origin.y);
-      ctx.lineTo(yAxis.x, yAxis.y);
+      ctx.lineTo(origin.x, yAxis.y);
+      ctx.strokeStyle = '#0000FF';
+      ctx.lineWidth = 3;
       ctx.stroke();
-
-      ctx.fillText('Y', yAxis.x, yAxis.y - 5);
+      
+      ctx.beginPath();
+      ctx.moveTo(origin.x, yAxis.y);
+      ctx.lineTo(origin.x - 6, yAxis.y + 10);
+      ctx.lineTo(origin.x + 6, yAxis.y + 10);
+      ctx.closePath();
+      ctx.fillStyle = '#0000FF';
+      ctx.fill();
+      
+      ctx.fillStyle = '#0000FF';
+      ctx.font = 'bold 20px Arial';
+      ctx.fillText('Y', origin.x - 20, yAxis.y - 10);
 
       ctx.fillStyle = 'blue';
       fiducialPoints.forEach(point => {
@@ -378,13 +389,17 @@
       ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
       ctx.fillRect(-squareSize / 2, -squareSize / 2, squareSize, squareSize);
 
-      ctx.fillStyle = '#FF8C00';
+      ctx.fillStyle = '#00FF00';
       ctx.beginPath();
       ctx.moveTo(0, -squareSize / 2);
-      ctx.lineTo(-5, -squareSize / 2 - 10);
-      ctx.lineTo(5, -squareSize / 2 - 10);
+      ctx.lineTo(-8, -squareSize / 2 - 18);
+      ctx.lineTo(8, -squareSize / 2 - 18);
       ctx.closePath();
       ctx.fill();
+      
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
       ctx.restore();
 
@@ -451,13 +466,14 @@
       const offsetX = (canvas.width - fieldDimensions.width * scale) / 2;
       const offsetY = (canvas.height - fieldDimensions.height * scale) / 2;
 
-      const fieldX = ((mouseX - offsetX) / scale) - fieldDimensions.width / 2;
-      const fieldY = fieldDimensions.height / 2 - ((mouseY - offsetY) / scale);
+      // Convert mouse position to field coordinates
+      const fieldX = (mouseX - offsetX) / scale;
+      const fieldY = fieldDimensions.height - ((mouseY - offsetY) / scale);
 
       const squareSize = 20;
       const { x: squareX, y: squareY } = {
-        x: offsetX + (squarePosition.x + fieldDimensions.width / 2) * scale,
-        y: offsetY + (fieldDimensions.height / 2 - squarePosition.y) * scale
+        x: offsetX + squarePosition.x * scale,
+        y: offsetY + (fieldDimensions.height - squarePosition.y) * scale
       };
 
       if (
@@ -489,12 +505,12 @@
       const offsetX = (canvas.width - fieldDimensions.width * scale) / 2;
       const offsetY = (canvas.height - fieldDimensions.height * scale) / 2;
 
-      const fieldX = ((mouseX - offsetX) / scale) - fieldDimensions.width / 2;
-      const fieldY = fieldDimensions.height / 2 - ((mouseY - offsetY) / scale);
+      const fieldX = (mouseX - offsetX) / scale;
+      const fieldY = fieldDimensions.height - ((mouseY - offsetY) / scale);
 
       squarePosition = {
-        x: Math.max(-fieldDimensions.width / 2, Math.min(fieldDimensions.width / 2, fieldX)),
-        y: Math.max(-fieldDimensions.height / 2, Math.min(fieldDimensions.height / 2, fieldY))
+        x: Math.max(0, Math.min(fieldDimensions.width, fieldX)),
+        y: Math.max(0, Math.min(fieldDimensions.height, fieldY))
       };
 
       updateClosestPoint();
