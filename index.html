@@ -1,528 +1,790 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>April Tag Visualizer</title>
+  <title>AprilTag Visualizer</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+    :root {
+      --bg: #0e1117;
+      --surface: #161b22;
+      --surface2: #1c2230;
+      --border: #2a3140;
+      --text: #e6edf3;
+      --text-muted: #7d8590;
+      --accent: #58a6ff;
+      --red: #f85149;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --orange: #db6d28;
+      --purple: #bc8cff;
+      --tag-bg: rgba(88,166,255,0.12);
+      --tag-active: rgba(63,185,80,0.2);
     }
 
-    #canvas-container {
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+      gap: 0;
+    }
+
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--accent);
+    }
+
+    header h1 span { color: var(--text-muted); font-weight: 400; }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .file-btn {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .file-btn:hover { border-color: var(--accent); background: rgba(88,166,255,0.08); }
+
+    .format-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: rgba(188,140,255,0.12);
+      color: var(--purple);
+    }
+
+    .download-link {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .download-link:hover { color: var(--accent); }
+
+    .canvas-area {
       position: relative;
-      margin-top: 20px;
-      border: 1px solid black;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      overflow: hidden;
     }
 
     canvas {
-      cursor: move;
+      cursor: crosshair;
+      display: block;
     }
 
-    .info-panel {
-      margin-top: 10px;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background-color: #f5f5f5;
-      width: 800px;
-      font-size: 14px;
+    /* ── Tag tooltip on hover ── */
+    .tag-tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      opacity: 0;
+      transition: opacity 0.12s;
+      z-index: 10;
+      white-space: nowrap;
     }
 
-    .file-input {
-      margin-bottom: 15px;
+    .tag-tooltip.visible { opacity: 1; }
+    .tag-tooltip .tt-id { color: var(--accent); font-weight: 700; font-size: 14px; }
+    .tag-tooltip .tt-coord { color: var(--text-muted); }
+    .tag-tooltip .tt-val { color: var(--text); }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-section h3 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    /* Robot info */
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 13px;
+    }
+
+    .stat-label { color: var(--text-muted); }
+
+    .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    .stat-value.accent { color: var(--accent); }
+    .stat-value.green { color: var(--green); }
+
+    .keybind-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+
+    kbd {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    /* Tag list */
+    .tag-list-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 16px 12px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .tag-list-header {
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+      padding: 14px 0 8px;
+      z-index: 2;
+    }
+
+    .tag-list-header h3 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    .tag-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      margin-bottom: 2px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.1s;
+      font-size: 12px;
+    }
+
+    .tag-chip:hover { background: var(--tag-bg); }
+    .tag-chip.closest { background: var(--tag-active); }
+
+    .tag-chip .chip-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 13px;
+      min-width: 28px;
+      text-align: center;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--tag-bg);
+      color: var(--accent);
+    }
+
+    .tag-chip.closest .chip-id {
+      background: var(--tag-active);
+      color: var(--green);
+    }
+
+    .tag-chip .chip-coords {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .tag-chip .chip-dist {
+      margin-left: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .tag-chip.closest .chip-dist { color: var(--green); }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      height: 100%;
+      text-align: center;
+      padding: 20px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .empty-icon {
+      font-size: 32px;
+      opacity: 0.4;
     }
   </style>
 </head>
-
 <body>
-  <h1>April Tag Visualizer</h1>
+  <div class="app">
+    <header>
+      <h1>AprilTag <span>Visualizer</span></h1>
+      <div class="header-controls">
+        <span id="format-badge" class="format-badge" style="display:none;"></span>
+        <button class="file-btn" onclick="document.getElementById('file-input').click()">Load Field Map</button>
+        <input type="file" id="file-input" accept=".json,.fmap" hidden>
+        <a class="download-link" href="https://raw.githubusercontent.com/wpilibsuite/allwpilib/refs/heads/main/apriltag/src/main/native/resources/edu/wpi/first/apriltag/2026-rebuilt-welded.json" download>
+          Download sample ↓
+        </a>
+      </div>
+    </header>
 
-  <div class="file-input">
-    <label for="file-input">Choose a field map file:</label>
-    <input type="file" id="file-input" accept="*">
-    <div id="format-display" style="margin-top: 10px; font-style: italic;">Format: Not detected</div>
-    <p>If you don't have a field map file, you can download one <a href="https://raw.githubusercontent.com/wpilibsuite/allwpilib/refs/heads/main/apriltag/src/main/native/resources/edu/wpi/first/apriltag/2026-rebuilt-welded.json" download>here</a>.</p>
-    <p>If that website doesn't prompt you for a download, you'll have to:</p>
-    <ol>
-      <li>Right click somewhere on text of the page</li>
-      <li>Click "Save as" or similar</li>
-      <li>Follow the file download prompt</li>
-    </ol>
-  </div>
+    <div class="canvas-area">
+      <canvas id="field"></canvas>
+      <div id="tooltip" class="tag-tooltip"></div>
+    </div>
 
-  <div id="canvas-container">
-    <canvas id="field-map" width="800" height="600"></canvas>
-  </div>
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <h3>Robot Position</h3>
+        <div class="stat-row">
+          <span class="stat-label">X</span>
+          <span class="stat-value accent" id="stat-x">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Y</span>
+          <span class="stat-value accent" id="stat-y">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Heading</span>
+          <span class="stat-value" id="stat-rot">0°</span>
+        </div>
+        <div class="keybind-hint">
+          <kbd>A</kbd> <kbd>D</kbd> rotate · <kbd>W</kbd> reset · <kbd>S</kbd> flip
+        </div>
+      </div>
 
-  <div class="info-panel">
-    <div>Drag the red square to find the closest fiducial point</div>
-    <div>Use WASD keys to rotate: A/D rotate, W reset, S flip 180°</div>
-    <div id="position-info">Square position: (0.00, 0.00)</div>
-    <div id="closest-info">Closest point: None</div>
-    <div id="distance-info">Distance: N/A</div>
-    <div id="rotation-info">Rotation: N/A</div>
+      <div class="sidebar-section">
+        <h3>Nearest Tag</h3>
+        <div class="stat-row">
+          <span class="stat-label">Tag ID</span>
+          <span class="stat-value green" id="stat-nearest">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Distance</span>
+          <span class="stat-value" id="stat-dist">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Facing</span>
+          <span class="stat-value" id="stat-facing">—</span>
+        </div>
+      </div>
+
+      <div class="tag-list-header" style="padding: 14px 16px 0;">
+        <h3>All Tags <span id="tag-count"></span></h3>
+      </div>
+      <div class="tag-list-container" id="tag-list">
+        <div class="empty-state">
+          <div class="empty-icon">⬡</div>
+          Load a field map to see tags
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
-    const canvas = document.getElementById('field-map');
+    // ─── State ───
+    const state = {
+      tags: [],          // {id, x, y, z, rotation}
+      field: { w: 0, h: 0 },
+      robot: { x: 0, y: 0 },
+      rotation: 0,       // radians
+      closest: null,     // tag object or null
+      hoveredTag: null,   // tag id or null
+      dragging: false,
+    };
+
+    // ─── DOM refs ───
+    const canvas = document.getElementById('field');
     const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
 
-    let fiducialPoints = [];
-    let fieldDimensions = { width: 0, height: 0 };
-    let squarePosition = { x: 0, y: 0 };
-    let squareRotation = 0;
-    let isDragging = false;
-    let closestPoint = null;
+    // ─── Coordinate transforms (set after field load) ───
+    let tx = { scale: 1, ox: 0, oy: 0 };
 
-    const fileInput = document.getElementById('file-input');
-    fileInput.addEventListener('change', handleFileSelect);
-
-    try {
-      const fileContent = JSON.parse(document.querySelector('pre[data-field-map]')?.textContent || '{}');
-      if (fileContent && fileContent.fiducials) {
-        processFieldMap(fileContent);
-      }
-    } catch (e) {
-      console.error('Could not load default field map', e);
+    function toCanvas(fx, fy) {
+      return [tx.ox + fx * tx.scale, tx.oy + (state.field.h - fy) * tx.scale];
     }
 
-    function handleFileSelect(event) {
-      const file = event.target.files[0];
-      if (!file) return;
+    function toField(cx, cy) {
+      return [(cx - tx.ox) / tx.scale, state.field.h - (cy - tx.oy) / tx.scale];
+    }
 
+    function recalcTransform() {
+      const pad = 0.9;
+      tx.scale = Math.min(canvas.width / state.field.w, canvas.height / state.field.h) * pad;
+      tx.ox = (canvas.width - state.field.w * tx.scale) / 2;
+      tx.oy = (canvas.height - state.field.h * tx.scale) / 2;
+    }
+
+    // ─── File loading ───
+    document.getElementById('file-input').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
       const reader = new FileReader();
-      reader.onload = function (e) {
-        try {
-          const fieldMap = JSON.parse(e.target.result);
-          processFieldMap(fieldMap);
-        } catch (error) {
-          console.error('Error parsing field map file:', error);
-          alert('Error parsing field map file. Please make sure it is a valid JSON file.');
-          document.getElementById('format-display').textContent = 'Format: Invalid file';
-        }
+      reader.onload = ev => {
+        try { loadFieldMap(JSON.parse(ev.target.result)); }
+        catch { alert('Invalid JSON file.'); }
       };
       reader.readAsText(file);
-    }
+    });
 
-    function quaternionToRotationMatrix(q) {
-      // Extract quaternion components
-      const w = q.W !== undefined ? q.W : q.w;
-      const x = q.X !== undefined ? q.X : q.x;
-      const y = q.Y !== undefined ? q.Y : q.y;
-      const z = q.Z !== undefined ? q.Z : q.z;
+    function loadFieldMap(data) {
+      const badge = document.getElementById('format-badge');
 
-      // Handle the special case where quaternion is almost zero
-      if (Math.abs(w) < 0.0001 && Math.abs(x) < 0.0001 &&
-        Math.abs(y) < 0.0001 && Math.abs(z) < 0.0001) {
-        return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+      if (data.fiducials) {
+        // Limelight format
+        badge.textContent = 'Limelight';
+        badge.style.display = '';
+        state.field.w = data.fieldlength;
+        state.field.h = data.fieldwidth;
+        state.tags = data.fiducials.map(f => ({
+          id: f.id,
+          x: f.transform[3] + state.field.w / 2,
+          y: f.transform[7] + state.field.h / 2,
+          z: f.transform[11],
+          rotation: [
+            [f.transform[0], f.transform[1], f.transform[2]],
+            [f.transform[4], f.transform[5], f.transform[6]],
+            [f.transform[8], f.transform[9], f.transform[10]],
+          ],
+        }));
+      } else if (data.tags) {
+        // WPILib format
+        badge.textContent = 'WPILib';
+        badge.style.display = '';
+        state.field.w = data.field.length;
+        state.field.h = data.field.width;
+        state.tags = data.tags.map(t => ({
+          id: t.ID,
+          x: t.pose.translation.x,
+          y: t.pose.translation.y,
+          z: t.pose.translation.z,
+          rotation: quatToMat(t.pose.rotation.quaternion),
+        }));
+      } else {
+        alert('Unrecognized field map format.');
+        return;
       }
 
-      // Find the magnitude of the quaternion
-      const magnitude = Math.sqrt(w * w + x * x + y * y + z * z);
+      state.robot = { x: state.field.w * 0.1, y: state.field.h * 0.1 };
+      state.rotation = 0;
+      resizeCanvas();
+      update();
+    }
 
-      // Normalize the quaternion if it's not already a unit quaternion
-      const nw = magnitude > 0 ? w / magnitude : w;
-      const nx = magnitude > 0 ? x / magnitude : x;
-      const ny = magnitude > 0 ? y / magnitude : y;
-      const nz = magnitude > 0 ? z / magnitude : z;
-
-      // Calculate rotation matrix elements
+    function quatToMat(q) {
+      let w = q.W ?? q.w, x = q.X ?? q.x, y = q.Y ?? q.y, z = q.Z ?? q.z;
+      const mag = Math.hypot(w, x, y, z);
+      if (mag < 1e-6) return [[1,0,0],[0,1,0],[0,0,1]];
+      w /= mag; x /= mag; y /= mag; z /= mag;
       return [
-        [1 - 2 * ny * ny - 2 * nz * nz, 2 * nx * ny - 2 * nw * nz, 2 * nx * nz + 2 * nw * ny],
-        [2 * nx * ny + 2 * nw * nz, 1 - 2 * nx * nx - 2 * nz * nz, 2 * ny * nz - 2 * nw * nx],
-        [2 * nx * nz - 2 * nw * ny, 2 * ny * nz + 2 * nw * nx, 1 - 2 * nx * nx - 2 * ny * ny]
+        [1-2*(y*y+z*z), 2*(x*y-w*z),   2*(x*z+w*y)],
+        [2*(x*y+w*z),   1-2*(x*x+z*z), 2*(y*z-w*x)],
+        [2*(x*z-w*y),   2*(y*z+w*x),   1-2*(x*x+y*y)],
       ];
     }
 
-    function detectFieldMapFormat(fieldMap) {
-      if (fieldMap.fiducials && Array.isArray(fieldMap.fiducials)) {
-        document.getElementById('format-display').textContent = 'Format: Limelight (fmap)';
-        return 'limelight';
-      } else if (fieldMap.tags && Array.isArray(fieldMap.tags)) {
-        document.getElementById('format-display').textContent = 'Format: WPILib (json)';
-        return 'wpilib';
-      } else {
-        console.warn('Could not determine field map format, defaulting to Limelight format');
-        document.getElementById('format-display').textContent = 'Format: Unknown (using Limelight)';
-        return 'limelight';
+    // ─── Core update ───
+    function update() {
+      findClosest();
+      updateSidebar();
+      draw();
+    }
+
+    function findClosest() {
+      state.closest = null;
+      let minD = Infinity;
+      for (const tag of state.tags) {
+        const d = Math.hypot(tag.x - state.robot.x, tag.y - state.robot.y);
+        if (d < minD) { minD = d; state.closest = { ...tag, dist: d }; }
       }
     }
 
-    function processFieldMap(fieldMap) {
-      const format = detectFieldMapFormat(fieldMap);
+    // ─── Sidebar updates ───
+    function updateSidebar() {
+      const { robot, rotation, closest, tags } = state;
+      const deg = ((rotation * 180 / Math.PI) % 360 + 360) % 360;
 
-      if (format === 'limelight') {
-        // === LIMELIGHT FORMAT (fmap) ===
-        fieldDimensions = {
-          width: fieldMap.fieldlength,
-          height: fieldMap.fieldwidth
-        };
-        
-        fiducialPoints = fieldMap.fiducials.map(fiducial => {
-          // Convert from center-based coordinates to bottom-left based
-          const x = fiducial.transform[3] + fieldDimensions.width / 2;
-          const y = fiducial.transform[7] + fieldDimensions.height / 2;
-          
-          const rotMatrix = [
-            [fiducial.transform[0], fiducial.transform[1], fiducial.transform[2]],
-            [fiducial.transform[4], fiducial.transform[5], fiducial.transform[6]],
-            [fiducial.transform[8], fiducial.transform[9], fiducial.transform[10]]
-          ];
+      document.getElementById('stat-x').textContent = robot.x.toFixed(2) + ' m';
+      document.getElementById('stat-y').textContent = robot.y.toFixed(2) + ' m';
+      document.getElementById('stat-rot').textContent = deg.toFixed(1) + '°';
 
-          return {
-            id: fiducial.id,
-            x: x,
-            y: y,
-            z: fiducial.transform[11],
-            rotation: rotMatrix,
-            rawTransform: fiducial.transform
-          };
-        });
+      if (closest) {
+        document.getElementById('stat-nearest').textContent = '#' + closest.id;
+        document.getElementById('stat-dist').textContent = closest.dist.toFixed(3) + ' m';
+        const r = closest.rotation;
+        document.getElementById('stat-facing').textContent =
+          `[${r[0][0].toFixed(2)}, ${r[0][1].toFixed(2)}, ${r[0][2].toFixed(2)}]`;
       } else {
-        // === WPILIB FORMAT (json) ===
-        fieldDimensions = {
-          width: fieldMap.field.length,
-          height: fieldMap.field.width
-        };
-        
-        fiducialPoints = fieldMap.tags.map(tag => {
-          // Use coordinates directly (already bottom-left based)
-          const x = tag.pose.translation.x;
-          const y = tag.pose.translation.y;
-          const z = tag.pose.translation.z;
-
-          // Convert quaternion to rotation matrix
-          const rotMatrix = quaternionToRotationMatrix(tag.pose.rotation.quaternion);
-
-          return {
-            id: tag.ID,
-            x: x,
-            y: y,
-            z: z,
-            rotation: rotMatrix,
-            rawQuaternion: tag.pose.rotation.quaternion
-          };
-        });
+        document.getElementById('stat-nearest').textContent = '—';
+        document.getElementById('stat-dist').textContent = '—';
+        document.getElementById('stat-facing').textContent = '—';
       }
 
-      // Initialize square position near bottom left
-      squarePosition = { x: fieldDimensions.width * 0.1, y: fieldDimensions.height * 0.1 };
-      squareRotation = 0;
-
-      updateClosestPoint();
-      drawScene();
+      renderTagList();
     }
 
-    function updateClosestPoint() {
-      if (fiducialPoints.length === 0) {
-        closestPoint = null;
-        return;
-      }
+    function renderTagList() {
+      const container = document.getElementById('tag-list');
+      const { tags, closest, robot } = state;
+      if (tags.length === 0) return;
 
-      let minDistance = Infinity;
-      closestPoint = null;
+      document.getElementById('tag-count').textContent = `(${tags.length})`;
 
-      fiducialPoints.forEach(point => {
-        const distance = Math.sqrt(
-          Math.pow(point.x - squarePosition.x, 2) +
-          Math.pow(point.y - squarePosition.y, 2)
-        );
+      // Sort by distance to robot
+      const sorted = tags
+        .map(t => ({ ...t, dist: Math.hypot(t.x - robot.x, t.y - robot.y) }))
+        .sort((a, b) => a.dist - b.dist);
 
-        if (distance < minDistance) {
-          minDistance = distance;
-          closestPoint = { ...point, distance };
-        }
+      container.innerHTML = sorted.map(t => {
+        const isCl = closest && t.id === closest.id;
+        return `<div class="tag-chip${isCl ? ' closest' : ''}" data-id="${t.id}">
+          <span class="chip-id">${t.id}</span>
+          <span class="chip-coords">(${t.x.toFixed(1)}, ${t.y.toFixed(1)})</span>
+          <span class="chip-dist">${t.dist.toFixed(2)}m</span>
+        </div>`;
+      }).join('');
+
+      container.querySelectorAll('.tag-chip').forEach(el => {
+        el.addEventListener('mouseenter', () => { state.hoveredTag = +el.dataset.id; draw(); });
+        el.addEventListener('mouseleave', () => { state.hoveredTag = null; draw(); });
       });
-
-      document.getElementById('position-info').textContent =
-        `Square position: (${squarePosition.x.toFixed(2)}, ${squarePosition.y.toFixed(2)})`;
-
-      if (closestPoint) {
-        document.getElementById('closest-info').textContent =
-          `Closest point: ID ${closestPoint.id} at (${closestPoint.x.toFixed(2)}, ${closestPoint.y.toFixed(2)})`;
-        document.getElementById('distance-info').textContent =
-          `Distance: ${closestPoint.distance.toFixed(2)} units`;
-
-        const rot = closestPoint.rotation;
-
-        document.getElementById('rotation-info').textContent =
-          `Rotation: Fiducial ID ${closestPoint.id} [${rot[0][0].toFixed(2)}, ${rot[0][1].toFixed(2)}, ${rot[0][2].toFixed(2)}]`;
-      } else {
-        document.getElementById('closest-info').textContent = 'Closest point: None';
-        document.getElementById('distance-info').textContent = 'Distance: N/A';
-        document.getElementById('rotation-info').textContent = 'Rotation: N/A';
-      }
     }
 
-    function drawScene() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // ─── Drawing ───
+    function draw() {
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
 
-      if (fieldDimensions.width === 0 || fiducialPoints.length === 0) {
-        ctx.fillStyle = '#888';
-        ctx.font = '20px Arial';
+      if (!state.tags.length) {
+        ctx.fillStyle = '#30363d';
+        ctx.font = '500 16px "DM Sans", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Please load a field map file', canvas.width / 2, canvas.height / 2);
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Load a field map to begin', W / 2, H / 2);
         return;
       }
 
-      const scale = Math.min(
-        canvas.width / fieldDimensions.width,
-        canvas.height / fieldDimensions.height
-      ) * 0.9;
+      recalcTransform();
+      drawGrid();
+      drawAxes();
+      drawTags();
+      drawConnectionLine();
+      drawRobot();
+    }
 
-      const offsetX = (canvas.width - fieldDimensions.width * scale) / 2;
-      const offsetY = (canvas.height - fieldDimensions.height * scale) / 2;
-
-      const fieldToCanvas = (x, y) => {
-        return {
-          x: offsetX + x * scale,
-          y: offsetY + (fieldDimensions.height - y) * scale,
-        };
-      };
-
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(offsetX, offsetY, fieldDimensions.width * scale, fieldDimensions.height * scale);
-
-      ctx.strokeStyle = '#ddd';
+    function drawGrid() {
+      ctx.strokeStyle = '#1a1f2b';
       ctx.lineWidth = 1;
+      const fw = state.field.w, fh = state.field.h;
 
-      for (let x = 0; x <= Math.ceil(fieldDimensions.width); x += 1) {
-        const canvasX = fieldToCanvas(x, 0).x;
-        ctx.beginPath();
-        ctx.moveTo(canvasX, offsetY);
-        ctx.lineTo(canvasX, offsetY + fieldDimensions.height * scale);
-        ctx.stroke();
+      // Field border
+      const [bx, by] = toCanvas(0, fh);
+      ctx.strokeStyle = '#2a3140';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(bx, by, fw * tx.scale, fh * tx.scale);
+
+      // Grid
+      ctx.strokeStyle = '#151a24';
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= Math.ceil(fw); x++) {
+        const [gx] = toCanvas(x, 0);
+        ctx.beginPath(); ctx.moveTo(gx, tx.oy); ctx.lineTo(gx, tx.oy + fh * tx.scale); ctx.stroke();
       }
-
-      for (let y = 0; y <= Math.ceil(fieldDimensions.height); y += 1) {
-        const canvasY = fieldToCanvas(0, y).y;
-        ctx.beginPath();
-        ctx.moveTo(offsetX, canvasY);
-        ctx.lineTo(offsetX + fieldDimensions.width * scale, canvasY);
-        ctx.stroke();
+      for (let y = 0; y <= Math.ceil(fh); y++) {
+        const [, gy] = toCanvas(0, y);
+        ctx.beginPath(); ctx.moveTo(tx.ox, gy); ctx.lineTo(tx.ox + fw * tx.scale, gy); ctx.stroke();
       }
+    }
 
-      const origin = fieldToCanvas(0, 0);
-      const xAxis = fieldToCanvas(2, 0);
-      const yAxis = fieldToCanvas(0, 2);
-      
-      ctx.beginPath();
-      ctx.moveTo(origin.x, origin.y);
-      ctx.lineTo(xAxis.x, origin.y);
-      ctx.strokeStyle = '#FF0000';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      
-      ctx.beginPath();
-      ctx.moveTo(xAxis.x, origin.y);
-      ctx.lineTo(xAxis.x - 10, origin.y - 6);
-      ctx.lineTo(xAxis.x - 10, origin.y + 6);
-      ctx.closePath();
-      ctx.fillStyle = '#FF0000';
-      ctx.fill();
-      
-      ctx.fillStyle = '#FF0000';
-      ctx.font = 'bold 20px Arial';
-      ctx.fillText('X', xAxis.x + 10, origin.y + 6);
-      
-      ctx.beginPath();
-      ctx.moveTo(origin.x, origin.y);
-      ctx.lineTo(origin.x, yAxis.y);
-      ctx.strokeStyle = '#0000FF';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      
-      ctx.beginPath();
-      ctx.moveTo(origin.x, yAxis.y);
-      ctx.lineTo(origin.x - 6, yAxis.y + 10);
-      ctx.lineTo(origin.x + 6, yAxis.y + 10);
-      ctx.closePath();
-      ctx.fillStyle = '#0000FF';
-      ctx.fill();
-      
-      ctx.fillStyle = '#0000FF';
-      ctx.font = 'bold 20px Arial';
-      ctx.fillText('Y', origin.x - 20, yAxis.y - 10);
+    function drawAxes() {
+      const [ox, oy] = toCanvas(0, 0);
+      const [ax] = toCanvas(1.8, 0);
+      const [, ay] = toCanvas(0, 1.8);
 
-      ctx.fillStyle = 'blue';
-      fiducialPoints.forEach(point => {
-        const { x, y } = fieldToCanvas(point.x, point.y);
+      // X axis
+      ctx.strokeStyle = '#f8514980'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ax, oy); ctx.stroke();
+      ctx.fillStyle = '#f85149'; ctx.font = 'bold 12px "JetBrains Mono"';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText('X', ax + 6, oy);
 
+      // Y axis
+      ctx.strokeStyle = '#58a6ff80'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox, ay); ctx.stroke();
+      ctx.fillStyle = '#58a6ff'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('Y', ox, ay - 6);
+    }
+
+    function drawTags() {
+      const { tags, closest, hoveredTag } = state;
+      const r = 12; // tag marker radius
+
+      for (const tag of tags) {
+        const [cx, cy] = toCanvas(tag.x, tag.y);
+        const isCl = closest && tag.id === closest.id;
+        const isHov = hoveredTag === tag.id;
+        const highlighted = isCl || isHov;
+
+        // Glow ring for highlighted
+        if (highlighted) {
+          ctx.beginPath(); ctx.arc(cx, cy, r + 6, 0, Math.PI * 2);
+          ctx.fillStyle = isCl ? 'rgba(63,185,80,0.12)' : 'rgba(88,166,255,0.12)';
+          ctx.fill();
+          ctx.beginPath(); ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+          ctx.strokeStyle = isCl ? '#3fb95060' : '#58a6ff40';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+
+        // Facing direction arrow
+        const rot = tag.rotation;
+        const arrowLen = 22;
+        const dx = rot[0][0] * arrowLen;
+        const dy = -rot[1][0] * arrowLen;
+        ctx.strokeStyle = highlighted ? (isCl ? '#3fb950' : '#58a6ff') : '#f8514960';
+        ctx.lineWidth = highlighted ? 2.5 : 1.5;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + dx, cy + dy); ctx.stroke();
+        // arrowhead
+        const angle = Math.atan2(dy, dx);
         ctx.beginPath();
-        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.moveTo(cx + dx, cy + dy);
+        ctx.lineTo(cx + dx - 6 * Math.cos(angle - 0.5), cy + dy - 6 * Math.sin(angle - 0.5));
+        ctx.lineTo(cx + dx - 6 * Math.cos(angle + 0.5), cy + dy - 6 * Math.sin(angle + 0.5));
+        ctx.closePath();
+        ctx.fillStyle = ctx.strokeStyle;
         ctx.fill();
 
-        const rotMatrix = point.rotation;
-        const arrowLength = 15;
-
-        ctx.strokeStyle = 'red';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + rotMatrix[0][0] * arrowLength, y - rotMatrix[1][0] * arrowLength);
+        // Main circle
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = isCl ? '#1a3a2a' : isHov ? '#1a2540' : '#161b22';
+        ctx.fill();
+        ctx.strokeStyle = isCl ? '#3fb950' : isHov ? '#58a6ff' : '#3a4250';
+        ctx.lineWidth = isCl || isHov ? 2 : 1.5;
         ctx.stroke();
 
-        ctx.fillStyle = 'white';
-        ctx.font = '10px Arial';
-        ctx.fillRect(x + 15, y - 8, 16, 12);
-        ctx.fillStyle = 'black';
-        ctx.fillText(point.id.toString(), x + 18, y + 2);
-        ctx.fillStyle = 'blue';
-      });
+        // ID text inside circle
+        ctx.fillStyle = isCl ? '#3fb950' : isHov ? '#58a6ff' : '#8b949e';
+        ctx.font = `bold ${tag.id > 99 ? 9 : 11}px "JetBrains Mono"`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(tag.id, cx, cy + 0.5);
+      }
+    }
 
-      const squareSize = 20;
-      const { x: squareX, y: squareY } = fieldToCanvas(squarePosition.x, squarePosition.y);
+    function drawConnectionLine() {
+      if (!state.closest) return;
+      const [rx, ry] = toCanvas(state.robot.x, state.robot.y);
+      const [cx, cy] = toCanvas(state.closest.x, state.closest.y);
+
+      // Dashed line
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = '#3fb95050';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(cx, cy); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    function drawRobot() {
+      const [rx, ry] = toCanvas(state.robot.x, state.robot.y);
+      const size = 14;
 
       ctx.save();
+      ctx.translate(rx, ry);
+      ctx.rotate(state.rotation);
 
-      ctx.translate(squareX, squareY);
-      ctx.rotate(squareRotation);
-
-      ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
-      ctx.fillRect(-squareSize / 2, -squareSize / 2, squareSize, squareSize);
-
-      ctx.fillStyle = '#00FF00';
-      ctx.beginPath();
-      ctx.moveTo(0, -squareSize / 2);
-      ctx.lineTo(-8, -squareSize / 2 - 18);
-      ctx.lineTo(8, -squareSize / 2 - 18);
-      ctx.closePath();
-      ctx.fill();
-      
-      ctx.strokeStyle = '#000000';
+      // Body
+      ctx.fillStyle = 'rgba(248,81,73,0.8)';
+      ctx.strokeStyle = '#f85149';
       ctx.lineWidth = 2;
-      ctx.stroke();
+      ctx.beginPath();
+      ctx.roundRect(-size/2, -size/2, size, size, 3);
+      ctx.fill(); ctx.stroke();
+
+      // Direction triangle
+      ctx.fillStyle = '#3fb950';
+      ctx.strokeStyle = '#2a8a3c';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, -size/2 - 2);
+      ctx.lineTo(-6, -size/2 - 14);
+      ctx.lineTo(6, -size/2 - 14);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
 
       ctx.restore();
-
-      if (closestPoint) {
-        const { x: closestX, y: closestY } = fieldToCanvas(closestPoint.x, closestPoint.y);
-
-        ctx.strokeStyle = 'green';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(squareX, squareY);
-        ctx.lineTo(closestX, closestY);
-        ctx.stroke();
-      }
     }
 
-    canvas.addEventListener('mousedown', handleMouseDown);
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseup', handleMouseUp);
-    canvas.addEventListener('mouseleave', handleMouseUp);
+    // ─── Interaction ───
+    function mouseToField(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return toField((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
+    }
 
-    document.addEventListener('keydown', handleKeyDown);
+    function clampToField(x, y) {
+      return [
+        Math.max(0, Math.min(state.field.w, x)),
+        Math.max(0, Math.min(state.field.h, y)),
+      ];
+    }
 
-    function handleKeyDown(e) {
-      const key = e.key.toLowerCase();
+    canvas.addEventListener('mousedown', e => {
+      if (!state.field.w) return;
+      const [cx, cy] = clampToField(...mouseToField(e));
+      state.robot.x = cx;
+      state.robot.y = cy;
+      state.dragging = true;
+      update();
+    });
 
-      if (!['w', 'a', 's', 'd'].includes(key)) return;
+    canvas.addEventListener('mousemove', e => {
+      if (state.dragging && state.field.w) {
+        const [cx, cy] = clampToField(...mouseToField(e));
+        state.robot.x = cx;
+        state.robot.y = cy;
+        update();
+        return;
+      }
 
+      // Tooltip on hover over tags
+      if (!state.tags.length) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+
+      let found = null;
+      for (const tag of state.tags) {
+        const [tcx, tcy] = toCanvas(tag.x, tag.y);
+        if (Math.hypot(mx - tcx, my - tcy) < 18) { found = tag; break; }
+      }
+
+      if (found) {
+        tooltip.innerHTML = `<span class="tt-id">Tag #${found.id}</span><br>
+          <span class="tt-coord">X:</span> <span class="tt-val">${found.x.toFixed(3)}</span>
+          <span class="tt-coord"> Y:</span> <span class="tt-val">${found.y.toFixed(3)}</span>
+          <span class="tt-coord"> Z:</span> <span class="tt-val">${found.z.toFixed(3)}</span>`;
+        tooltip.style.left = (e.clientX - canvas.parentElement.getBoundingClientRect().left + 14) + 'px';
+        tooltip.style.top = (e.clientY - canvas.parentElement.getBoundingClientRect().top - 20) + 'px';
+        tooltip.classList.add('visible');
+        state.hoveredTag = found.id;
+        draw();
+      } else if (tooltip.classList.contains('visible')) {
+        tooltip.classList.remove('visible');
+        state.hoveredTag = null;
+        draw();
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => { state.dragging = false; });
+    canvas.addEventListener('mouseleave', () => {
+      state.dragging = false;
+      tooltip.classList.remove('visible');
+      if (state.hoveredTag !== null) { state.hoveredTag = null; draw(); }
+    });
+
+    document.addEventListener('keydown', e => {
+      const k = e.key.toLowerCase();
+      if (!['w','a','s','d'].includes(k)) return;
       e.preventDefault();
+      const step = Math.PI / 18; // 10°
+      if (k === 'a') state.rotation -= step;
+      else if (k === 'd') state.rotation += step;
+      else if (k === 'w') state.rotation = 0;
+      else if (k === 's') state.rotation += Math.PI;
+      state.rotation = ((state.rotation % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
+      update();
+    });
 
-      const rotationStep = Math.PI / 18;
-
-      switch (key) {
-        case 'a':
-          squareRotation -= rotationStep;
-          break;
-        case 'd':
-          squareRotation += rotationStep;
-          break;
-        case 'w':
-          squareRotation = 0;
-          break;
-        case 's':
-          squareRotation += Math.PI;
-          break;
-      }
-
-      squareRotation = (squareRotation + 2 * Math.PI) % (2 * Math.PI);
-
-      drawScene();
+    // ─── Resize ───
+    function resizeCanvas() {
+      const area = canvas.parentElement;
+      canvas.width = area.clientWidth;
+      canvas.height = area.clientHeight;
+      if (state.field.w) recalcTransform();
+      draw();
     }
 
-    function handleMouseDown(e) {
-      if (fieldDimensions.width === 0) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      const scale = Math.min(
-        canvas.width / fieldDimensions.width,
-        canvas.height / fieldDimensions.height
-      ) * 0.9;
-
-      const offsetX = (canvas.width - fieldDimensions.width * scale) / 2;
-      const offsetY = (canvas.height - fieldDimensions.height * scale) / 2;
-
-      // Convert mouse position to field coordinates
-      const fieldX = (mouseX - offsetX) / scale;
-      const fieldY = fieldDimensions.height - ((mouseY - offsetY) / scale);
-
-      const squareSize = 20;
-      const { x: squareX, y: squareY } = {
-        x: offsetX + squarePosition.x * scale,
-        y: offsetY + (fieldDimensions.height - squarePosition.y) * scale
-      };
-
-      if (
-        mouseX >= squareX - squareSize / 2 &&
-        mouseX <= squareX + squareSize / 2 &&
-        mouseY >= squareY - squareSize / 2 &&
-        mouseY <= squareY + squareSize / 2
-      ) {
-        isDragging = true;
-      } else {
-        squarePosition = { x: fieldX, y: fieldY };
-        updateClosestPoint();
-        drawScene();
-      }
-    }
-
-    function handleMouseMove(e) {
-      if (!isDragging || fieldDimensions.width === 0) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      const scale = Math.min(
-        canvas.width / fieldDimensions.width,
-        canvas.height / fieldDimensions.height
-      ) * 0.9;
-
-      const offsetX = (canvas.width - fieldDimensions.width * scale) / 2;
-      const offsetY = (canvas.height - fieldDimensions.height * scale) / 2;
-
-      const fieldX = (mouseX - offsetX) / scale;
-      const fieldY = fieldDimensions.height - ((mouseY - offsetY) / scale);
-
-      squarePosition = {
-        x: Math.max(0, Math.min(fieldDimensions.width, fieldX)),
-        y: Math.max(0, Math.min(fieldDimensions.height, fieldY))
-      };
-
-      updateClosestPoint();
-      drawScene();
-    }
-
-    function handleMouseUp() {
-      isDragging = false;
-    }
-
-    drawScene();
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
   </script>
 </body>
-
 </html>
